@@ -68,7 +68,7 @@ export function PowerBarVertical({ acceleratorPosition, brakeApplied, vehicleSpe
   const regenFill = showRegen ? smoothRegen : 0
 
   // Brake: fixed fill when applied
-  const brakeFill = showBrake ? 0.8 : 0
+  const brakeFill = showBrake ? 1 : 0
 
   return (
     <div className={cn('flex flex-col', className)}>
