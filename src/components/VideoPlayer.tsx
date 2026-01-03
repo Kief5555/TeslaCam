@@ -16,13 +16,14 @@ interface VideoPlayerProps {
   muted?: boolean
   onTimeUpdate?: (time: number) => void
   onLoadedMetadata?: (duration: number) => void
+  onLoadedData?: () => void
   onEnded?: () => void
   onClick?: () => void
   showControls?: boolean
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
-  ({ src, className, muted = true, onTimeUpdate, onLoadedMetadata, onEnded, onClick, showControls = false }, ref) => {
+  ({ src, className, muted = true, onTimeUpdate, onLoadedMetadata, onLoadedData, onEnded, onClick, showControls = false }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null)
 
     useImperativeHandle(ref, () => ({
@@ -50,20 +51,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         onLoadedMetadata?.(video.duration)
       }
 
+      const handleLoadedData = () => {
+        onLoadedData?.()
+      }
+
       const handleEnded = () => {
         onEnded?.()
       }
 
       video.addEventListener('timeupdate', handleTimeUpdate)
       video.addEventListener('loadedmetadata', handleLoadedMetadata)
+      video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('ended', handleEnded)
 
       return () => {
         video.removeEventListener('timeupdate', handleTimeUpdate)
         video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        video.removeEventListener('loadeddata', handleLoadedData)
         video.removeEventListener('ended', handleEnded)
       }
-    }, [onTimeUpdate, onLoadedMetadata, onEnded])
+    }, [onTimeUpdate, onLoadedMetadata, onLoadedData, onEnded])
 
     return (
       <video
