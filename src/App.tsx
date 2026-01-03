@@ -71,6 +71,7 @@ function App() {
   const [sharedCurrentTime, setSharedCurrentTime] = useState(0)
   const [sharedIsPlaying, setSharedIsPlaying] = useState(false)
   const [sharedPlaybackSpeed, setSharedPlaybackSpeed] = useState(1)
+  const [viewReady, setViewReady] = useState(true)
 
   // Compute clip groups from files
   const clipGroups = useMemo(() => {
@@ -121,6 +122,7 @@ function App() {
   }, [clipGroups])
 
   const handleVideoReady = useCallback(() => {
+    setTimeout(() => setViewReady(true), 50)
   }, [])
 
   const handleNextClip = useCallback(() => {
@@ -128,9 +130,12 @@ function App() {
 
     const currentIndex = clipGroups.findIndex(c => c.timestamp === selectedClip.timestamp)
     if (currentIndex >= 0 && currentIndex < clipGroups.length - 1) {
+      setViewReady(false)
       setSharedCurrentTime(0)
       setSharedIsPlaying(true)
-      setSelectedClip(clipGroups[currentIndex + 1])
+      setTimeout(() => {
+        setSelectedClip(clipGroups[currentIndex + 1])
+      }, 100)
     }
   }, [selectedClip, clipGroups])
 
@@ -327,6 +332,10 @@ function App() {
 
         {/* Video viewer */}
         <div className="flex-1 bg-neutral-950 relative">
+          <div
+            className="absolute inset-0 bg-neutral-950 pointer-events-none z-10 transition-opacity duration-200"
+            style={{ opacity: viewReady ? 0 : 1 }}
+          />
           {selectedClip ? (
             viewMode === 'driving' ? (
               <DrivingMode
@@ -456,6 +465,7 @@ function GridView({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const initializedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [firstFrameReady, setFirstFrameReady] = useState(false)
 
   // Set playback rate on all videos
   useEffect(() => {
@@ -500,7 +510,6 @@ function GridView({
         setIsPlaying(true)
       }
       setVideoReady(true)
-      onReady?.()
     }
   }
 
@@ -562,10 +571,16 @@ function GridView({
                   className="w-full h-full object-cover cursor-pointer"
                   muted
                   playsInline
-                  preload="metadata"
+                  preload="auto"
                   onClick={togglePlay}
                   onTimeUpdate={idx === 0 ? handleTimeUpdate : undefined}
                   onLoadedMetadata={idx === 0 ? handleVideoLoaded : undefined}
+                  onLoadedData={idx === 0 ? () => { 
+                    if (!firstFrameReady) {
+                      setFirstFrameReady(true)
+                      setTimeout(() => onReady?.(), 100)
+                    }
+                  } : undefined}
                   onEnded={idx === 0 ? handleEnded : undefined}
                 />
                 <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 rounded text-xs">
@@ -671,6 +686,7 @@ function SingleView({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const initializedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [firstFrameReady, setFirstFrameReady] = useState(false)
 
   // Set playback rate on video
   useEffect(() => {
@@ -717,7 +733,6 @@ function SingleView({
         setIsPlaying(true)
       }
       setVideoReady(true)
-      onReady?.()
     } else {
       setVideoReady(true)
     }
@@ -814,9 +829,15 @@ function SingleView({
             className="w-full h-full object-contain"
             muted
             playsInline
-            preload="metadata"
+            preload="auto"
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleVideoLoaded}
+            onLoadedData={() => { 
+              if (!firstFrameReady) {
+                setFirstFrameReady(true)
+                setTimeout(() => onReady?.(), 100)
+              }
+            }}
             onEnded={handleEnded}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}

@@ -93,6 +93,7 @@ export function DrivingMode({
   const setPlaybackSpeed = onPlaybackSpeedChange ?? setInternalPlaybackSpeed
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [firstFrameReady, setFirstFrameReady] = useState(false)
   const videoLoadedCountRef = useRef(0)
 
   // Get all video refs
@@ -140,10 +141,17 @@ export function DrivingMode({
         }
 
         setVideoReady(true)
-        onReady?.()
       }, 50)
     }
-  }, [initialTime, initialPlaying, getAllRefs, onReady])
+  }, [initialTime, initialPlaying, getAllRefs])
+
+  // Handle first frame ready
+  const handleFirstFrameReady = useCallback(() => {
+    if (!firstFrameReady) {
+      setFirstFrameReady(true)
+      setTimeout(() => onReady?.(), 100)
+    }
+  }, [firstFrameReady, onReady])
 
   // Notify parent of time updates
   useEffect(() => {
@@ -343,6 +351,7 @@ export function DrivingMode({
               src={getMainCamera()!}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleVideoLoaded}
+              onLoadedData={handleFirstFrameReady}
               onEnded={handleVideoEnded}
               onClick={togglePlay}
               className="w-full h-full object-cover"

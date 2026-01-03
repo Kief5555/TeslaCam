@@ -72,7 +72,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         className={cn('w-full h-full object-cover', className)}
         muted={muted}
         playsInline
-        preload="metadata"
+        preload="auto"
         controls={showControls}
         onClick={onClick}
       />
