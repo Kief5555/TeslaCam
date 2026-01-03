@@ -19,3 +19,14 @@ export function formatTime(seconds: number): string {
   const secs = Math.floor(seconds % 60)
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
+
+export function calculateLiveTimestamp(clipTime: string, playbackSeconds: number): string {
+  const [hours, minutes, seconds] = clipTime.split(':').map(Number)
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds + Math.floor(playbackSeconds)
+  
+  const h = Math.floor(totalSeconds / 3600) % 24
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
