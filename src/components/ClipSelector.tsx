@@ -36,7 +36,6 @@ interface ClipGroup {
 
 interface ClipSelectorProps {
   folderPath: string | null
-  files: string[]
   clipGroups: ClipGroup[]
   onSelectFolder: () => void
   onSelectClip: (clip: ClipGroup) => void
@@ -49,7 +48,6 @@ interface ClipSelectorProps {
 
 export function ClipSelector({
   folderPath,
-  files,
   clipGroups,
   onSelectFolder,
   onSelectClip,

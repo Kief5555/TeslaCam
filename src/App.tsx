@@ -234,7 +234,6 @@ function App() {
           {/* Clip selector */}
           <ClipSelector
             folderPath={folderPath}
-            files={files}
             clipGroups={clipGroups}
             onSelectFolder={handleSelectFolder}
             onSelectClip={setSelectedClip}
