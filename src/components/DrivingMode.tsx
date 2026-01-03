@@ -93,7 +93,6 @@ export function DrivingMode({
   const setPlaybackSpeed = onPlaybackSpeedChange ?? setInternalPlaybackSpeed
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
-  const [firstFrameReady, setFirstFrameReady] = useState(false)
   const videoLoadedCountRef = useRef(0)
 
   // Get all video refs
@@ -141,17 +140,10 @@ export function DrivingMode({
         }
 
         setVideoReady(true)
+        onReady?.()
       }, 50)
     }
-  }, [initialTime, initialPlaying, getAllRefs])
-
-  // Handle first frame ready
-  const handleFirstFrameReady = useCallback(() => {
-    if (!firstFrameReady) {
-      setFirstFrameReady(true)
-      setTimeout(() => onReady?.(), 100)
-    }
-  }, [firstFrameReady, onReady])
+  }, [initialTime, initialPlaying, getAllRefs, onReady])
 
   // Notify parent of time updates
   useEffect(() => {
@@ -342,7 +334,7 @@ export function DrivingMode({
       <div className="flex-1 relative overflow-hidden">
         {/* Main camera view */}
         <div
-          className="absolute inset-0 transition-opacity duration-150"
+          className="absolute inset-0"
           style={{ opacity: videoReady ? 1 : 0 }}
         >
           {getMainCamera() && (
@@ -351,7 +343,6 @@ export function DrivingMode({
               src={getMainCamera()!}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleVideoLoaded}
-              onLoadedData={handleFirstFrameReady}
               onEnded={handleVideoEnded}
               onClick={togglePlay}
               className="w-full h-full object-cover"
