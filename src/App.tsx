@@ -22,6 +22,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
+  FolderOpen,
 } from 'lucide-react'
 
 const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3, 5]
@@ -38,30 +39,23 @@ interface ClipGroup {
     left_pillar?: string
     right_pillar?: string
   }
+  // Store File references for SEI extraction (optional, used in web mode)
+  files?: {
+    front?: File
+    back?: File
+    left_repeater?: File
+    right_repeater?: File
+    left_pillar?: File
+    right_pillar?: File
+  }
 }
 
 type ViewMode = 'driving' | 'grid' | 'single'
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      selectFolder: () => Promise<string | null>
-      readDirectory: (path: string) => Promise<string[]>
-      readFile: (path: string) => Promise<ArrayBuffer | null>
-      getFilePath: (relativePath: string) => Promise<string>
-      saveFile: (options: { defaultPath: string; filters: { name: string; extensions: string[] }[]; data: Uint8Array }) => Promise<string | null>
-      showSaveDialog: (options: { defaultPath: string; filters: { name: string; extensions: string[] }[] }) => Promise<string | null>
-      getAppPath: () => Promise<string>
-      showItemInFolder: (path: string) => void
-      maximizeWindow: () => Promise<boolean>
-      isMaximized: () => Promise<boolean>
-    }
-  }
-}
-
 function App() {
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [files, setFiles] = useState<string[]>([])
+  const [fileMap, setFileMap] = useState<Map<string, File>>(new Map())
   const [selectedClip, setSelectedClip] = useState<ClipGroup | null>(null)
   const [seiFrames, setSeiFrames] = useState<SeiFrame[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('driving')
@@ -71,6 +65,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [speedUnit, setSpeedUnit] = useState<'mph' | 'kmh'>('kmh')
   const [selectedClipsForExport, setSelectedClipsForExport] = useState<ClipGroup[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Shared video state across all view modes
   const [sharedCurrentTime, setSharedCurrentTime] = useState(0)
@@ -82,8 +77,8 @@ function App() {
   const clipGroups = useMemo(() => {
     const groups = new Map<string, ClipGroup>()
 
-    files.forEach(file => {
-      const match = file.match(/^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})-(.+)\.mp4$/)
+    files.forEach(fileName => {
+      const match = fileName.match(/^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})-(.+)\.mp4$/)
       if (!match) return
 
       const [, date, time, camera] = match
@@ -95,20 +90,36 @@ function App() {
           date,
           time: time.replace(/-/g, ':'),
           cameras: {},
+          files: {},
         })
       }
 
       const group = groups.get(timestamp)!
       const cameraKey = camera as keyof ClipGroup['cameras']
-      if (cameraKey && folderPath) {
-        group.cameras[cameraKey] = `file://${folderPath}/${file}`
+      const file = fileMap.get(fileName)
+      if (cameraKey && file) {
+        // Create blob URL for video playback
+        group.cameras[cameraKey] = URL.createObjectURL(file)
+        if (!group.files) group.files = {}
+        group.files[cameraKey] = file
       }
     })
 
     return Array.from(groups.values()).sort((a, b) =>
-      a.timestamp.localeCompare(b.timestamp) // Sort ascending for sequential playback
+      a.timestamp.localeCompare(b.timestamp)
     )
-  }, [files, folderPath])
+  }, [files, fileMap])
+
+  // Cleanup blob URLs when component unmounts or clips change
+  useEffect(() => {
+    return () => {
+      clipGroups.forEach(group => {
+        Object.values(group.cameras).forEach(url => {
+          if (url) URL.revokeObjectURL(url)
+        })
+      })
+    }
+  }, [clipGroups])
 
   // Callback when video is ready - hides transition overlay
   const handleVideoReady = useCallback(() => {
@@ -121,12 +132,10 @@ function App() {
 
     const currentIndex = clipGroups.findIndex(c => c.timestamp === selectedClip.timestamp)
     if (currentIndex >= 0 && currentIndex < clipGroups.length - 1) {
-      // Start transition - show overlay to hide black flash
       setIsTransitioning(true)
-      setSharedCurrentTime(0) // Reset time
-      setSharedIsPlaying(true) // Auto-play next clip
+      setSharedCurrentTime(0)
+      setSharedIsPlaying(true)
       setSelectedClip(clipGroups[currentIndex + 1])
-      // Transition will end when onReady is called by the view component
     }
   }, [selectedClip, clipGroups])
 
@@ -137,56 +146,51 @@ function App() {
     }
   }, [selectedClip?.timestamp])
 
-  // Handle folder selection
-  const handleSelectFolder = useCallback(async () => {
-    if (window.electronAPI) {
-      const path = await window.electronAPI.selectFolder()
-      if (path) {
-        setFolderPath(path)
-        const fileList = await window.electronAPI.readDirectory(path)
-        setFiles(fileList)
-        setSelectedClip(null)
-        setSeiFrames([])
+  // Handle folder selection via file input
+  const handleSelectFolder = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  // Process selected files
+  const handleFilesSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files
+    if (!fileList || fileList.length === 0) return
+
+    const newFileMap = new Map<string, File>()
+    const fileNames: string[] = []
+
+    // Get folder name from first file's path
+    const firstFile = fileList[0]
+    const pathParts = firstFile.webkitRelativePath.split('/')
+    const folderName = pathParts[0] || 'Selected Folder'
+    setFolderPath(folderName)
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i]
+      if (file.name.endsWith('.mp4')) {
+        fileNames.push(file.name)
+        newFileMap.set(file.name, file)
       }
-    } else {
-      // For browser testing, use a default path
-      setFolderPath('/Users/kieferlin/Downloads/N Test Route/Comp')
-      // Mock files for testing
-      setFiles([
-        '2025-12-30_09-14-14-front.mp4',
-        '2025-12-30_09-14-14-back.mp4',
-        '2025-12-30_09-14-14-left_repeater.mp4',
-        '2025-12-30_09-14-14-right_repeater.mp4',
-        '2025-12-30_09-14-14-left_pillar.mp4',
-        '2025-12-30_09-14-14-right_pillar.mp4',
-      ])
     }
+
+    setFiles(fileNames)
+    setFileMap(newFileMap)
+    setSelectedClip(null)
+    setSeiFrames([])
   }, [])
 
   // Load SEI data when clip is selected
   useEffect(() => {
-    if (!selectedClip?.cameras.front || !folderPath) return
+    if (!selectedClip?.files?.front) return
 
     const loadSeiData = async () => {
       setIsLoading(true)
       try {
-        const frontPath = selectedClip.cameras.front!.replace('file://', '')
-
-        if (window.electronAPI) {
-          const data = await window.electronAPI.readFile(frontPath)
-          if (data) {
-            // Convert Uint8Array to ArrayBuffer (IPC serializes Buffer to Uint8Array)
-            const arrayBuffer = data instanceof ArrayBuffer
-              ? data
-              : (data as Uint8Array).buffer.slice(
-                (data as Uint8Array).byteOffset,
-                (data as Uint8Array).byteOffset + (data as Uint8Array).byteLength
-              ) as ArrayBuffer
-            const frames = await extractSeiFromFile(arrayBuffer)
-            setSeiFrames(frames)
-            console.log(`Loaded ${frames.length} SEI frames`)
-          }
-        }
+        const frontFile = selectedClip.files!.front!
+        const arrayBuffer = await frontFile.arrayBuffer()
+        const frames = await extractSeiFromFile(arrayBuffer)
+        setSeiFrames(frames)
+        console.log(`Loaded ${frames.length} SEI frames`)
       } catch (err) {
         console.error('Failed to load SEI data:', err)
       } finally {
@@ -195,26 +199,9 @@ function App() {
     }
 
     loadSeiData()
-  }, [selectedClip, folderPath])
-
-  // Auto-load default folder
-  useEffect(() => {
-    const defaultPath = '/Users/kieferlin/Downloads/N Test Route/Comp'
-    setFolderPath(defaultPath)
-
-    const loadFiles = async () => {
-      if (window.electronAPI) {
-        const fileList = await window.electronAPI.readDirectory(defaultPath)
-        setFiles(fileList)
-      }
-    }
-
-    loadFiles()
-  }, [])
+  }, [selectedClip])
 
   const handleExportVideo = async () => {
-    // Implementation would use MediaRecorder or ffmpeg.wasm
-    // For now, this is a placeholder
     return new Promise<void>((resolve) => {
       setTimeout(resolve, 5000)
     })
@@ -222,14 +209,27 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-neutral-950 text-white flex overflow-hidden">
+      {/* Hidden file input for folder selection */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        // @ts-expect-error webkitdirectory is not in React types
+        webkitdirectory=""
+        directory=""
+        multiple
+        className="hidden"
+        onChange={handleFilesSelected}
+        accept="video/mp4"
+      />
+
       {/* Sidebar */}
       <div
         className={`${sidebarCollapsed ? 'w-0' : 'w-72'
           } shrink-0 border-r border-neutral-800 transition-all duration-300 overflow-hidden`}
       >
         <div className="w-72 h-full flex flex-col">
-          {/* App header - padded for macOS traffic lights */}
-          <div className="flex items-center h-14 justify-between pl-24 pr-4 border-b border-neutral-800 draggable">
+          {/* App header */}
+          <div className="flex items-center h-14 justify-between px-4 border-b border-neutral-800">
             <div className="flex items-center gap-2">
               <Car className="w-5 h-5 text-[#3e6ae1]" />
               <span className="font-semibold">TeslaCam</span>
@@ -253,8 +253,8 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top toolbar - extra left padding when sidebar collapsed for macOS traffic lights */}
-        <div className={`h-14 flex items-center justify-between ${sidebarCollapsed ? 'pl-20' : 'pl-4'} pr-4 border-b border-neutral-800 bg-neutral-900/50 draggable`}>
+        {/* Top toolbar */}
+        <div className={`h-14 flex items-center justify-between ${sidebarCollapsed ? 'pl-4' : 'pl-4'} pr-4 border-b border-neutral-800 bg-neutral-900/50`}>
           {/* Left side - toggle sidebar and view mode */}
           <div className="flex items-center gap-4">
             <Button
@@ -391,9 +391,17 @@ function App() {
             )
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-neutral-500">
-              <Car className="w-24 h-24 mb-4 opacity-20" />
-              <p className="text-lg">Select a clip to start viewing</p>
-              <p className="text-sm mt-2">Use the sidebar to browse your dashcam footage</p>
+              <FolderOpen className="w-24 h-24 mb-4 opacity-20" />
+              <p className="text-lg">Select a TeslaCam folder to start viewing</p>
+              <p className="text-sm mt-2 text-neutral-600">Click "Select Folder" in the sidebar</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={handleSelectFolder}
+              >
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Select Folder
+              </Button>
             </div>
           )}
         </div>
@@ -404,7 +412,7 @@ function App() {
         open={showExportDialog}
         onOpenChange={(open) => {
           setShowExportDialog(open)
-          if (!open) setSelectedClipsForExport([]) // Clear selection when dialog closes
+          if (!open) setSelectedClipsForExport([])
         }}
         seiFrames={seiFrames}
         clipName={selectedClip?.timestamp ?? 'clip'}

@@ -92,10 +92,6 @@ export class VideoExporter {
     this.ctx = this.canvas.getContext('2d')!
   }
 
-  private getCurrentClipSeiFrames(clipIndex: number): SeiFrame[] {
-    return this.clips[clipIndex]?.seiFrames || []
-  }
-
   private reportProgress(progress: ExportProgress) {
     this.progressCallback?.(progress)
   }

@@ -24,6 +24,14 @@ interface ClipGroup {
     left_pillar?: string
     right_pillar?: string
   }
+  files?: {
+    front?: File
+    back?: File
+    left_repeater?: File
+    right_repeater?: File
+    left_pillar?: File
+    right_pillar?: File
+  }
 }
 
 interface ClipSelectorProps {

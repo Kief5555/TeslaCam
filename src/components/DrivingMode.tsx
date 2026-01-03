@@ -565,7 +565,13 @@ export function DrivingMode({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => window.electronAPI?.maximizeWindow()}
+              onClick={() => {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen()
+                } else {
+                  document.documentElement.requestFullscreen()
+                }
+              }}
             >
               <Maximize className="w-4 h-4" />
             </Button>

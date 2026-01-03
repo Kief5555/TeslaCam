@@ -14,7 +14,6 @@ import {
   Settings2,
   Check,
   Clock,
-  FolderOpen,
   Car,
   Grid2X2,
   Camera,
@@ -82,7 +81,6 @@ export function ExportDialog({
   clipName,
   clipDuration = 60,
   selectedClips = [],
-  onExportVideo,
   availableCameras = ['front', 'back', 'left_repeater', 'right_repeater', 'left_pillar', 'right_pillar'],
 }: ExportDialogProps) {
   const [options, setOptions] = useState<ExportOptions>({
@@ -116,44 +114,22 @@ export function ExportDialog({
     const csv = seiFramesToCsv(seiFrames)
     const blob = new Blob([csv], { type: 'text/csv' })
 
-    if (window.electronAPI) {
-      const data = await blob.arrayBuffer()
-      await window.electronAPI.saveFile({
-        defaultPath: `${clipName}_sei_data.csv`,
-        filters: [{ name: 'CSV', extensions: ['csv'] }],
-        data: new Uint8Array(data),
-      })
-    } else {
-      // Fallback for browser
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${clipName}_sei_data.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-  }
-
-  const handleSelectSaveLocation = async () => {
-    if (window.electronAPI?.showSaveDialog) {
-      const format = options.format
-      const result = await window.electronAPI.showSaveDialog({
-        defaultPath: `${exportClipName}.${format}`,
-        filters: [{ name: format.toUpperCase(), extensions: [format] }],
-      })
-      if (result) {
-        setSavePath(result)
-      }
-    }
+    // Browser download
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${clipName}_sei_data.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleExportVideo = async () => {
-    if (!savePath && window.electronAPI) {
-      await handleSelectSaveLocation()
-      return
+    // Auto-set save path if not set
+    if (!savePath) {
+      setSavePath(`${exportClipName}.${options.format}`)
     }
 
-    if (!savePath) return
+    const filename = savePath || `${exportClipName}.${options.format}`
 
     setIsExporting(true)
     setProgress(0)
@@ -189,21 +165,17 @@ export function ExportDialog({
       // Export and get blob
       const blob = await exporter.export()
 
-      // Convert blob to Uint8Array and save
-      const arrayBuffer = await blob.arrayBuffer()
-      const data = new Uint8Array(arrayBuffer)
-
-      if (window.electronAPI) {
-        await window.electronAPI.saveFile({
-          defaultPath: savePath,
-          filters: [{ name: options.format.toUpperCase(), extensions: [options.format] }],
-          data,
-        })
-      }
+      // Browser download
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
 
       setIsExporting(false)
       setExportComplete(true)
-      setExportedFilePath(savePath)
+      setExportedFilePath(filename)
     } catch (err) {
       console.error('Export failed:', err)
       setIsExporting(false)
@@ -532,22 +504,15 @@ export function ExportDialog({
                 </div>
               </div>
 
-              {/* Save location */}
+              {/* Filename preview */}
               <div className="space-y-2">
                 <h4 className="text-xs font-medium text-neutral-400 flex items-center gap-2">
-                  <FolderOpen className="w-3 h-3" />
-                  Save Location
+                  <Download className="w-3 h-3" />
+                  Export Filename
                 </h4>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={handleSelectSaveLocation}
-                >
-                  <FolderOpen className="w-4 h-4 mr-2 shrink-0" />
-                  <span className="truncate">
-                    {savePath || 'Choose save location...'}
-                  </span>
-                </Button>
+                <p className="text-sm text-neutral-300 bg-neutral-800/50 rounded px-3 py-2 truncate">
+                  {exportClipName}.{options.format}
+                </p>
               </div>
             </div>
           </div>
@@ -569,29 +534,26 @@ export function ExportDialog({
                   <span>Export complete!</span>
                 </div>
                 {exportedFilePath && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      if (window.electronAPI?.showItemInFolder) {
-                        window.electronAPI.showItemInFolder(exportedFilePath)
-                      }
-                    }}
-                  >
-                    <FolderOpen className="w-4 h-4 mr-2" />
-                    Show in Finder
-                  </Button>
+                  <p className="text-sm text-neutral-400 text-center">
+                    Saved as: {exportedFilePath}
+                  </p>
                 )}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Close
+                </Button>
               </div>
             ) : (
               <Button
                 variant="tesla"
                 className="w-full"
                 onClick={handleExportVideo}
-                disabled={!savePath}
               >
                 <Video className="w-4 h-4 mr-2" />
-                {savePath ? 'Export Video' : 'Select save location first'}
+                Export Video
               </Button>
             )}
           </div>
