@@ -36,7 +36,7 @@ interface ClipGroup {
 
 interface ClipSelectorProps {
   folderPath: string | null
-  files: string[]
+  clipGroups: ClipGroup[]
   onSelectFolder: () => void
   onSelectClip: (clip: ClipGroup) => void
   selectedClip: ClipGroup | null
@@ -48,7 +48,7 @@ interface ClipSelectorProps {
 
 export function ClipSelector({
   folderPath,
-  files,
+  clipGroups,
   onSelectFolder,
   onSelectClip,
   selectedClip,
@@ -59,49 +59,21 @@ export function ClipSelector({
 }: ClipSelectorProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
 
-  // Group files by timestamp
-  const clipGroups = useMemo(() => {
-    const groups = new Map<string, ClipGroup>()
-
-    files.forEach(file => {
-      // Parse filename: 2025-12-30_09-14-14-front.mp4
-      const match = file.match(/^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})-(.+)\.mp4$/)
-      if (!match) return
-
-      const [, date, time, camera] = match
-      const timestamp = `${date}_${time}`
-
-      if (!groups.has(timestamp)) {
-        groups.set(timestamp, {
-          timestamp,
-          date,
-          time: time.replace(/-/g, ':'),
-          cameras: {},
-        })
-      }
-
-      const group = groups.get(timestamp)!
-      const cameraKey = camera as keyof ClipGroup['cameras']
-      if (cameraKey && folderPath) {
-        group.cameras[cameraKey] = `file://${folderPath}/${file}`
-      }
-    })
-
-    return Array.from(groups.values()).sort((a, b) =>
+  const sortedClipGroups = useMemo(() => {
+    return [...clipGroups].sort((a, b) =>
       b.timestamp.localeCompare(a.timestamp)
     )
-  }, [files, folderPath])
+  }, [clipGroups])
 
-  // Group by date
   const clipsByDate = useMemo(() => {
     const byDate = new Map<string, ClipGroup[]>()
-    clipGroups.forEach(clip => {
+    sortedClipGroups.forEach(clip => {
       const existing = byDate.get(clip.date) || []
       existing.push(clip)
       byDate.set(clip.date, existing)
     })
     return byDate
-  }, [clipGroups])
+  }, [sortedClipGroups])
 
   const toggleDate = (date: string) => {
     const newExpanded = new Set(expandedDates)
@@ -161,7 +133,7 @@ export function ClipSelector({
 
       {/* Clip list */}
       <div className="flex-1 overflow-y-auto">
-        {clipGroups.length === 0 ? (
+        {sortedClipGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-neutral-500 p-4">
             <Video className="w-12 h-12 mb-2 opacity-50" />
             <p className="text-sm text-center">
@@ -238,7 +210,7 @@ export function ClipSelector({
       </div>
 
       {/* Stats & Export */}
-      {clipGroups.length > 0 && (
+      {sortedClipGroups.length > 0 && (
         <div className="p-4 border-t border-neutral-800 space-y-3">
           {selectedClipsForExport.length > 0 ? (
             <Button
@@ -251,7 +223,7 @@ export function ClipSelector({
             </Button>
           ) : (
             <div className="text-xs text-neutral-500">
-              {clipGroups.length} clips total
+              {sortedClipGroups.length} clips total
             </div>
           )}
         </div>
