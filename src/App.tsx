@@ -8,7 +8,7 @@ import { Switch } from './components/ui/switch'
 import { Slider } from './components/ui/slider'
 import { extractSeiFromFile } from './lib/sei-parser'
 import type { SeiFrame } from './lib/sei-parser'
-import { formatTime } from './lib/utils'
+import { formatTime, calculateLiveTimestamp } from './lib/utils'
 import {
   Cog,
   Monitor,
@@ -71,7 +71,6 @@ function App() {
   const [sharedCurrentTime, setSharedCurrentTime] = useState(0)
   const [sharedIsPlaying, setSharedIsPlaying] = useState(false)
   const [sharedPlaybackSpeed, setSharedPlaybackSpeed] = useState(1)
-  const [isTransitioning, setIsTransitioning] = useState(false)
 
   // Compute clip groups from files
   const clipGroups = useMemo(() => {
@@ -121,18 +120,14 @@ function App() {
     }
   }, [clipGroups])
 
-  // Callback when video is ready - hides transition overlay
   const handleVideoReady = useCallback(() => {
-    setIsTransitioning(false)
   }, [])
 
-  // Handle auto-advance to next clip
   const handleNextClip = useCallback(() => {
     if (!selectedClip || clipGroups.length === 0) return
 
     const currentIndex = clipGroups.findIndex(c => c.timestamp === selectedClip.timestamp)
     if (currentIndex >= 0 && currentIndex < clipGroups.length - 1) {
-      setIsTransitioning(true)
       setSharedCurrentTime(0)
       setSharedIsPlaying(true)
       setSelectedClip(clipGroups[currentIndex + 1])
@@ -303,9 +298,7 @@ function App() {
               <>
                 <span className="font-mono">{selectedClip.date}</span>
                 <span className="text-neutral-600">|</span>
-                <span className="font-mono">{selectedClip.time}</span>
-                <span className="text-neutral-600">|</span>
-                <span className="font-mono text-white">{formatTime(sharedCurrentTime)}</span>
+                <span className="font-mono text-white">{calculateLiveTimestamp(selectedClip.time, sharedCurrentTime)}</span>
               </>
             )}
             {isLoading && <span className="text-yellow-500">Loading...</span>}
@@ -334,11 +327,6 @@ function App() {
 
         {/* Video viewer */}
         <div className="flex-1 bg-neutral-950 relative">
-          {/* Transition overlay to prevent black flash */}
-          <div
-            className="absolute inset-0 bg-neutral-950 pointer-events-none z-10 transition-opacity duration-150"
-            style={{ opacity: isTransitioning ? 1 : 0 }}
-          />
           {selectedClip ? (
             viewMode === 'driving' ? (
               <DrivingMode
@@ -511,13 +499,8 @@ function GridView({
         videos.forEach(v => v.play())
         setIsPlaying(true)
       }
-      // Fade in after video has rendered first frame
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setVideoReady(true)
-          onReady?.()
-        })
-      })
+      setVideoReady(true)
+      onReady?.()
     }
   }
 
@@ -578,6 +561,8 @@ function GridView({
                   src={cameras[key]}
                   className="w-full h-full object-cover cursor-pointer"
                   muted
+                  playsInline
+                  preload="metadata"
                   onClick={togglePlay}
                   onTimeUpdate={idx === 0 ? handleTimeUpdate : undefined}
                   onLoadedMetadata={idx === 0 ? handleVideoLoaded : undefined}
@@ -731,18 +716,10 @@ function SingleView({
         videoRef.current.play()
         setIsPlaying(true)
       }
-      // Fade in after video has rendered first frame
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setVideoReady(true)
-          onReady?.()
-        })
-      })
+      setVideoReady(true)
+      onReady?.()
     } else {
-      // For camera changes, fade in quickly
-      requestAnimationFrame(() => {
-        setVideoReady(true)
-      })
+      setVideoReady(true)
     }
   }
 
@@ -836,6 +813,8 @@ function SingleView({
             src={cameras[selectedCamera]}
             className="w-full h-full object-contain"
             muted
+            playsInline
+            preload="metadata"
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleVideoLoaded}
             onEnded={handleEnded}

@@ -139,13 +139,8 @@ export function DrivingMode({
           setIsPlaying(true)
         }
 
-        // Fade in video after video has had time to render first frame
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setVideoReady(true)
-            onReady?.()
-          })
-        })
+        setVideoReady(true)
+        onReady?.()
       }, 50)
     }
   }, [initialTime, initialPlaying, getAllRefs, onReady])
