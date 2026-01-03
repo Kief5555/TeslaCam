@@ -55,3 +55,11 @@ Videos are 36fps. The `interpolateSeiData()` function finds the closest frame fo
 - All videos in a clip group are synchronized; the front camera drives time updates
 - UI components in `components/ui/` follow shadcn/ui patterns using `class-variance-authority`
 - The `cn()` utility merges Tailwind classes with clsx and tailwind-merge
+
+## Known Issues
+
+### Safari Performance
+- High playback speeds (3x, 5x) may exhibit lag/stutter in Safari due to browser limitations
+- This is a Safari-specific video decoding performance issue
+- Works smoothly in Chrome/Edge/Firefox at all speeds
+- Recommendation: Use Chrome-based browsers for best high-speed playback experience
